@@ -1,9 +1,11 @@
 #!/bin/bash
+# This script currently support only 64bit installation iso images
+# Recommended is to use debian 7 wheezy
 
 LOOPDIR='./loopdir'
 IRMOD='./irmod'
 CDRW='./cd'
-ISO='debian-7-preseed.iso'
+ISO='debian-preseed.iso'
 
 if [ $# -ne 2 ]; then
     echo "Usage: $0 <source_iso> <preseed_file>"
