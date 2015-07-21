@@ -111,4 +111,5 @@ PT_CONFIRMATIONS = [
     'd-i partman/confirm_nooverwrite boolean true',
     'd-i partman-md/confirm boolean true',
     'd-i partman-md/confirm_nooverwrite boolean true',
+    'd-i partman-basicfilesystems/no_swap boolean false',
 ]
