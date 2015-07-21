@@ -61,9 +61,9 @@ if __name__ == '__main__':
             output_preseed_file(output_file=args.output_file)
             if args.quiet:
                 devnull = open('/dev/null', 'w')
-                subprocess.call(['./debian-preseed.sh', args.input_iso, args.output_file], stdout=devnull)
+                subprocess.call(['bash', 'debian-preseed.sh', args.input_iso, args.output_file], stdout=devnull)
             else:
-                subprocess.call(['./debian-preseed.sh', args.input_iso, args.output_file], stdout=None)
+                subprocess.call(['bash', 'debian-preseed.sh', args.input_iso, args.output_file], stdout=None)
         else:
             print('Required parameter -o missing. Run program with --gen-iso input_iso -o file.')
             sys.exit(1)
