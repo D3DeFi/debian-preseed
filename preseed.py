@@ -1,6 +1,7 @@
 import sys
 from collections import OrderedDict
 import ConfigParser
+import argparse
 import logging
 
 
@@ -19,7 +20,7 @@ class PreseedCreator(object):
         try:
             self.cfparser.read(self.config_file)
         except ConfigParser.ParsingError:
-            self.logger.error('Unable to parse file {}'.format(self.config_file))
+            self.logger.error('Unable to parse file %s' % self.config_file)
             sys.exit(1)
         self.loaded_template = OrderedDict()
         # special functions are handled by handle_X methods 
@@ -39,7 +40,7 @@ class PreseedCreator(object):
                     else:
                         self.loaded_template[current_section].append(line)
         except IOError:
-            self.logger.error('No such file {}'.format(template))
+            self.logger.error('No such file %s' % template)
             sys.exit(1)
 
     def option_lookup(self, section, option):
@@ -47,10 +48,10 @@ class PreseedCreator(object):
         try:
             return self.cfparser.get(section, option)
         except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
-            self.logger.info('{} option was not found predefined in {}, skipping.'.format(option, self.config_file))
+            self.logger.info('%s option was not found predefined in %s, skipping.' % (option, self.config_file))
             return None 
 
-    def create_preseed(self, output_file='preseed.cfg'):
+    def create_preseed(self, output_file=None):
         """Method create_preseed builds preseed configuration based on previously loaded template 
         file and options defined in INI configuration file."""
         if not self.loaded_template:
@@ -60,11 +61,11 @@ class PreseedCreator(object):
         preseed_output = ''
         for section in self.cfparser.sections():
             if section in self.special_sections:
-                handle_function = getattr(self, 'handle_{}'.format(section), False)
+                handle_function = getattr(self, 'handle_%s' % section, False)
                 if handle_function:
                     preseed_output += handle_function(section)
                 else:
-                    self.logger.warning('No handler found for section {}, skipping.'.format(section))
+                    self.logger.warning('No handler found for section %s, skipping.' % section)
             else:
                 template_lines = self.loaded_template.get(section, False)
                 if template_lines:
@@ -76,7 +77,12 @@ class PreseedCreator(object):
                         if option is not None:
                             preseed_output += ' '.join(line).replace(line[-1], option) + '\n'
 
-        return preseed_output
+        if output_file is not None:
+            with open(output_file, 'w') as out_f:
+                out_f.write(preseed_output)
+            return
+        else:
+            return preseed_output
 
     def handle_network(self, section='network'):
         """Method handle_network applies specific parsing for networking section in preseed template file."""
@@ -127,9 +133,9 @@ class PreseedCreator(object):
         for mirror in sorted(mirrors_items):
             value = mirrors_items[mirror]
             if mirror.startswith('local') and len(mirror) == 6:
-                mirrors_output += 'd-i apt-setup/{}/repository string {}\n'.format(mirror, value)
+                mirrors_output += 'd-i apt-setup/%s/repository string %s\n' % (mirror, value)
             elif mirror.endswith('_source'):
-                mirrors_output += 'd-i apt-setup/{}/source boolean {}\n'.format(mirror.split('_')[0], value)
+                mirrors_output += 'd-i apt-setup/%s/source boolean %s\n' % (mirror.split('_')[0], value)
 
         return mirrors_output
 
@@ -180,7 +186,7 @@ class PreseedCreator(object):
                     partition_output += partition_config
                     continue
                 else:
-                    self.logger.error('Missing {} option in disk configuration, skipping whole partition.'.format(e))
+                    self.logger.error('Missing %s option in disk configuration, skipping whole partition.' % e)
                     continue
 
         return partition_output + '\n'
@@ -208,19 +214,11 @@ class PreseedCreator(object):
         try:
             self.logger.setLevel(getattr(logging, level))
         except AttributeError:
-            self.logger.error('No such logging level: {}.'.format(level))
+            self.logger.error('No such logging level: %s.' % level)
 
-    def test(self):
-        print(self.cfparser.options('localization'))
-        print(OrderedDict(self.cfparser.items('mirrors')))
-        print(self.cfparser.sections())
-    
 
 if __name__ == '__main__':
-    x = PreseedCreator()
-    x.read_template()
-    print x.create_preseed()   
-
-#TODO:
-#   - argparse
-#   - change string .format to older % formatter
+    parser = argparse.ArgumentParser()
+    preseed = PreseedCreator()
+    preseed.read_template()
+    print preseed.create_preseed()   
