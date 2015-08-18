@@ -11,14 +11,15 @@ class PreseedCreator(object):
     files are used during phase of Debian installation to preload installer with 
     already answered questions about system setup."""
 
-    def __init__(self, config_file='config.ini'):
+    def __init__(self, config_file):
         self.config_file = config_file
         logging.basicConfig(format='%(asctime)-15s %(levelname)s: %(message)s')
         self.logger = logging.getLogger('preseed_output')
         self.logger.setLevel(logging.INFO)
         self.cfparser = ConfigParser.ConfigParser()
         try:
-            self.cfparser.read(self.config_file)
+            if self.cfparser.read(self.config_file) == []:
+                raise ConfigParser.ParsingError('No config file detected.')
         except ConfigParser.ParsingError:
             self.logger.error('Unable to parse file %s' % self.config_file)
             sys.exit(1)
@@ -26,7 +27,7 @@ class PreseedCreator(object):
         # special functions are handled by handle_X methods 
         self.special_sections = ['network', 'mirrors', 'partitioning']
 
-    def read_template(self, template='template.cfg'):
+    def read_template(self, template):
         """Method read_template loads preseed template file into ordered dictionary for later processing."""
         current_section = None
         try:
@@ -211,14 +212,34 @@ class PreseedCreator(object):
         return partitions_output 
 
     def set_logging_level(self, level):
+        """Method set_logging_level allow user to define, which log messages to display."""
         try:
-            self.logger.setLevel(getattr(logging, level))
+            if level == 'QUIET':
+                self.logger.disabled = True
+            else:
+                self.logger.setLevel(getattr(logging, level))
         except AttributeError:
             self.logger.error('No such logging level: %s.' % level)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    preseed = PreseedCreator()
-    preseed.read_template()
-    print preseed.create_preseed()   
+    parser = argparse.ArgumentParser(description='Script parses options from INI file and tries \
+        to match them with lines in preseed template file. The main purpose is to simplify disk \
+        configuration syntax of partman, which is, by nature, terific at the first glance.')
+    parser.add_argument('-q', '--quiet', action='store_true', help='disable console logging to stderr')
+    parser.add_argument('-l', '--log-level', action='store', help='set logging level (DEBUG, INFO, WARNING, ERROR). \
+        Log messages less severe then specified log level will be ignored')
+    parser.add_argument('-c', '--config', action='store', help='read from specified INI file')
+    parser.add_argument('-i', '--input', action='store', help='use specified template for preseed generation')
+    parser.add_argument('-o', '--output', action='store', help='write preseed to specified file')
+    args = parser.parse_args()
+
+    preseed = PreseedCreator(config_file=args.config if args.config else 'config.ini')
+
+    if args.quiet:
+        preseed.set_logging_level('QUIET')
+    elif args.log_level:
+        preseed.set_logging_level(args.log_level)
+    
+    preseed.read_template(template=args.input if args.input else 'template.cfg')
+    preseed.create_preseed(output_file=args.output if args.output else None)   
