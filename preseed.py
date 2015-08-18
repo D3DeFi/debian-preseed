@@ -71,12 +71,13 @@ class PreseedCreator(object):
                 template_lines = self.loaded_template.get(section, False)
                 if template_lines:
                     for line in template_lines:
-                        line = line.split()
-                        if not line[-1].isupper():
-                            continue
-                        option = self.option_lookup(section, line[-1].lower())
-                        if option is not None:
-                            preseed_output += ' '.join(line).replace(line[-1], option) + '\n'
+                        line_lw = line.split()[-1]
+                        if not line_lw.isupper():
+                            preseed_output += ''.join(line)
+                        else:
+                            option = self.option_lookup(section, line_lw.lower())
+                            if option is not None:
+                                preseed_output += ''.join(line).replace(line_lw, option)
 
         if output_file is not None:
             with open(output_file, 'w') as out_f:
@@ -95,6 +96,7 @@ class PreseedCreator(object):
             for line in template_lines:
                 line_lw = line.split()[-1]
                 if not line_lw.isupper():
+                    network_output += ''.join(line)
                     continue
                 if line_lw.lower() == 'configure_networking':
                     network_output += ''.join(line).replace(line_lw, configure_networking)
@@ -125,6 +127,7 @@ class PreseedCreator(object):
             for line in template_lines:
                 line_lw = line.split()[-1]
                 if not line_lw.isupper():
+                    mirrors_output += ''.join(line)
                     continue
                 option = self.option_lookup(section, line_lw.lower())
                 if option is not None:
@@ -164,8 +167,8 @@ class PreseedCreator(object):
         for partition, attributes in partitions.iteritems():
             partition_config = ''
             try:
-                min, max = attributes['size'].split(',')    
-                partition_config += '%s %s %s ' % (min, int(min) + 1, str(max).lstrip())
+                size = attributes['size']
+                partition_config += '%s %s %s ' % (size, int(size) + 1, size)
 
                 format = attributes['format']
                 partition_config += '%s ' % format
@@ -201,6 +204,7 @@ class PreseedCreator(object):
             for line in template_lines:
                 line_lw = line.split()[-1]
                 if not line_lw.isupper():
+                    partitions_output += ''.join(line)
                     continue
                 option = self.option_lookup(section, line_lw.lower())
                 if option is not None:
@@ -212,7 +216,7 @@ class PreseedCreator(object):
         return partitions_output 
 
     def set_logging_level(self, level):
-        """Method set_logging_level allow user to define, which log messages to display."""
+        """Method set_logging_level allows user to define, which log messages to display."""
         try:
             if level == 'QUIET':
                 self.logger.disabled = True
@@ -242,4 +246,6 @@ if __name__ == '__main__':
         preseed.set_logging_level(args.log_level)
     
     preseed.read_template(template=args.input if args.input else 'template.cfg')
-    preseed.create_preseed(output_file=args.output if args.output else None)   
+    output = preseed.create_preseed(output_file=args.output if args.output else None)   
+    if output is not None:
+        print(output)
