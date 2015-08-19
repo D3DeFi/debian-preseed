@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys
 from collections import OrderedDict
 import ConfigParser
@@ -160,10 +162,28 @@ class PreseedCreator(object):
     def generate_partitions(self, partitions, section='partitioning'):
         """Method generate_partitions generates preseed like specification of partitions
         based on previously parsed input from INI file, which is handled by parse_partitions."""
-        partition_output = 'd-i partman-auto/expert_recipe string custom :: '
+        partition_output = ''
         method = self.option_lookup(section, 'method')
         if method == 'raid':
+            try:
+                raid_type = self.cfparser.get(section, 'raid_type')
+                raid_fs = self.cfparser.get(section, 'raid_fs')
+                raid_mount = self.cfparser.get(section, 'raid_mount')
+                raid_spares = self.cfparser.get(section, 'raid_spares')
+                use_disks = self.cfparser.get(section, 'use_disks')
+            except ConfigParser.NoOptionError as e:
+                self.logger.error('Unable to find raid option %s in %s' % (e.option, self.config_file))
+                sys.exit(6)
+
+            disks = '#'.join(use_disks.split())
+            partition_output += 'd-i partman-auto-raid/recipe string %s %s %s %s %s %s .\n' % (
+                raid_type, len(use_disks.split()), raid_spares, raid_fs, raid_mount, disks.rstrip('#'))
+            partition_output += 'd-i partman-auto/expert_recipe string custom :: '
+            # numbers 3096, 5000 and -1 are just magic to ensure that raid will reside on all free disk space
             partition_output += '4096 5000 -1 raid $lvmignore{ } method{ raid } . '
+        else:
+            partition_output += 'd-i partman-auto/expert_recipe string custom :: '
+
         for partition, attributes in partitions.iteritems():
             partition_config = ''
             try:
@@ -211,7 +231,8 @@ class PreseedCreator(object):
                     partitions_output += ''.join(line).replace(line_lw, option)
                     partition_items.pop(line_lw.lower(), None)
 
-        partitions = self.generate_partitions(self.parse_partitions(partition_items), section)
+        final_partitions = {key: value for key, value in partition_items.iteritems() if key.startswith('part')}
+        partitions = self.generate_partitions(self.parse_partitions(final_partitions), section)
         partitions_output += partitions
         return partitions_output 
 
