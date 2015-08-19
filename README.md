@@ -7,16 +7,11 @@ mentioned actions.
 'autoinstall' as a method during Debian installation. Usage is as follows:
 <pre>./debian-preseed.sh SOURCE_ISO PRESEED_FILE</pre>
 
-**generate_preseed.py** is a python script for automatic generation of a preseed file. This script mainly focuses on a partman's
-part of a preseed file, beceause it is the most complicated part of this configuration file. Preseed file is generated based on
-input provided by user in a **gp_meta/config.py** file. Use cases are as follows:
+**preseed.py** is a Python script for automatic generation of a preseed file. File is generated based on options located in .ini file 
+and preseed template file. To generate preseed, fill options in config.ini file first and then run following command:
 
-For a preview of 'How will be free space divided between partitions' first fillin PT_LVM_PARTITIONS variable in gp_meta/config.py file
-and then run:
-<pre>./generate_preseed.py -n TOTAL_FREE_SPACE</pre>
+<pre>python2 preseed.py -o preseed.cfg</pre>
 
-For generation of a preseed file, simply run:
-<pre>./generate_preseed.py</pre>
+For more help on how to use preseed.py file, simply run:
 
-If you want to automatically attach generated preseed file into ISO image, run:
-<pre>./generate_preseed.py --gen-iso SOURCE_ISO -o OUTPUT_PRESEED</pre>
+<pre>python2 preseed.py -h</pre>
