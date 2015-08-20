@@ -142,6 +142,10 @@ class PreseedCreator(object):
                 mirrors_output += 'd-i apt-setup/%s/repository string %s\n' % (mirror, value)
             elif mirror.endswith('_source'):
                 mirrors_output += 'd-i apt-setup/%s/source boolean %s\n' % (mirror.split('_')[0], value)
+            elif mirror.endswith('_comment'):
+                mirrors_output += 'd-i apt-setup/%s/comment string %s\n' % (mirror.split('_')[0], value)
+            elif mirror.endswith('_key'):
+                mirrors_output += 'd-i apt-setup/%s/key string %s\n' % (mirror.split('_')[0], value)
 
         return mirrors_output
 
@@ -160,6 +164,7 @@ class PreseedCreator(object):
         return partitions
         
     def generate_partitions(self, partitions, section='partitioning'):
+        # TODO: add option to create separate boot parititon in SW raid (2 sw raid groups)
         """Method generate_partitions generates preseed like specification of partitions
         based on previously parsed input from INI file, which is handled by parse_partitions."""
         partition_output, raid_options = '', []
@@ -175,7 +180,7 @@ class PreseedCreator(object):
             raid_options.insert(1, len(raid_options[-1].split('#')))
             partition_output += 'd-i partman-auto-raid/recipe string %s %s %s %s %s %s .\n' % tuple(raid_options)
             partition_output += 'd-i partman-auto/expert_recipe string custom :: '
-            # numbers 3096, 5000 and -1 are just magic to ensure that raid will reside on all free disk space
+            # numbers 4096, 5000 and -1 are just magic to ensure that raid will reside on all free disk space
             partition_output += '4096 5000 -1 raid $lvmignore{ } method{ raid } . '
         else:
             partition_output += 'd-i partman-auto/expert_recipe string custom :: '
