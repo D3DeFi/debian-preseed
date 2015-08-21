@@ -149,90 +149,29 @@ class PreseedCreator(object):
 
         return mirrors_output
 
-    def parse_partitions(self, partition_items):
-        """Method parse_partitions parses configuration of partitions from INI file."""
-        part_names, partitions = [], OrderedDict()
-        for partition in sorted(partition_items):
-            value = partition_items[partition]
-            if len(partition) == 5:
-                part_names.append(value)
-                partitions[value] = {}
-            else:
-                part, param = partition.split('_')
-                partitions[part_names[int(part[4])]].update({param: value})
-
-        return partitions
-        
-    def generate_partitions(self, partitions, section='partitioning'):
-        # TODO: add option to create separate boot parititon in SW raid (2 sw raid groups)
-        """Method generate_partitions generates preseed like specification of partitions
-        based on previously parsed input from INI file, which is handled by parse_partitions."""
-        partition_output, raid_options = '', []
-        if self.option_lookup(section, 'method') == 'raid':
-            try:
-                for raid_option in ['raid_type', 'raid_spares', 'raid_fs', 'raid_mount', 'use_disks']:
-                    raid_options.append(self.cfparser.get(section, raid_option))
-            except ConfigParser.NoOptionError as e:
-                self.logger.error('Unable to find raid option %s in %s' % (e.option, self.config_file))
-                sys.exit(6)
-
-            raid_options[-1] = '#'.join(raid_options[-1].split())
-            raid_options.insert(1, len(raid_options[-1].split('#')))
-            partition_output += 'd-i partman-auto-raid/recipe string %s %s %s %s %s %s .\n' % tuple(raid_options)
-            partition_output += 'd-i partman-auto/expert_recipe string custom :: '
-            # numbers 4096, 5000 and -1 are just magic to ensure that raid will reside on all free disk space
-            partition_output += '4096 5000 -1 raid $lvmignore{ } method{ raid } . '
-        else:
-            partition_output += 'd-i partman-auto/expert_recipe string custom :: '
-
-        for partition, attributes in partitions.iteritems():
-            partition_config = ''
-            try:
-                size = attributes['size']
-                format = attributes['format']
-                partition_config += '%s %s %s %s ' % (size, int(size) + 1, size, format)
-
-                if attributes['lvm'] == 'true':
-                    partition_config += '$defaultignore{ } $lvmok{ } '
-                else: 
-                    partition_config += '$primary{ } $lvmignore{ } '
-
-                if format == 'linux-swap':
-                    partition_config += 'method{ swap } format{ } . '
-                else:
-                    partition_config += 'method{ format } format{ } use_filesystem{ } filesystem{ %s } ' % format
-
-                partition_config += 'mountpoint{ %s } . ' % attributes['mount']
-                partition_output += partition_config
-            except KeyError as e:
-                if e.message == 'mount' and format == 'linux-swap':
-                    partition_output += partition_config
-                    continue
-                else:
-                    self.logger.error('Missing %s option in disk configuration, skipping whole partition.' % e)
-                    continue
-
-        return partition_output + '\n'
-
     def handle_partitioning(self, section='partitioning'):
         """Method handle_partitioning applies specific parsing for partitioning section in preseed template file."""
         partitions_output = ''
-        partition_items = dict(self.cfparser.items(section))
         template_lines = self.loaded_template.get(section, False)
-        if template_lines:
-            for line in template_lines:
-                line_lw = line.split()[-1]
-                if not line_lw.isupper():
-                    partitions_output += ''.join(line)
-                    continue
-                option = self.option_lookup(section, line_lw.lower())
-                if option is not None:
-                    partitions_output += ''.join(line).replace(line_lw, option)
-                    partition_items.pop(line_lw.lower(), None)
+        if not template_lines:
+            self.logger.warning('No %s section found in template file, skipping.' % (section))
+            return '\n'
+        
+        for line in template_lines:
+            line_lw = line.split()[-1]
+            if not line_lw.isupper():
+                partitions_output += ''.join(line)
+                continue
+            option = self.option_lookup(section, line_lw.lower())
+            if option is not None:
+                partitions_output += ''.join(line).replace(line_lw, option)
 
-        final_partitions = {key: value for key, value in partition_items.iteritems() if key.startswith('part')}
-        partitions = self.generate_partitions(self.parse_partitions(final_partitions), section)
-        partitions_output += partitions
+        partman = PartmanCreator(section, self.cfparser, self.logger)
+        if self.option_lookup(section, 'method') == 'raid':
+            partitions_output += partman.preload_raid_groups()
+        else:
+            partitions_output += 'd-i partman-auto/expert_recipe string custom :: '
+        partitions_output += partman.preload_partitions()
         return partitions_output 
 
     def set_logging_level(self, level):
@@ -244,6 +183,90 @@ class PreseedCreator(object):
                 self.logger.setLevel(getattr(logging, level))
         except AttributeError:
             self.logger.error('No such logging level: %s.' % level)
+
+
+class PartmanCreator(object):
+    """PartmanCreator class handles most complicated part of a preseeding, which is partman itself.
+    PartmanCreator uses simple options from INI configuration file. These options define raid groups
+    and partitions with prefix (raidgX, partX) followed by an option. For example raidg0_type."""
+
+    def __init__(self, section, cfparser, logger):
+        self.section = section
+        self.cfparser = cfparser
+        self.logger = logger
+        self.partition_options = self.cfparser.options(self.section)
+
+    def load_option(self, option):
+        """Method load_options is simple wrapper for ConfigParser's get method. If value is not found
+        within INI file, False is provided in return for later checking and settings defaults."""
+        try:
+            return self.cfparser.get(self.section, option)
+        except ConfigParser.NoOptionError:
+            return False
+
+    def preload_raid_groups(self):
+        """Method preload_raid_groups loads and parses configuration of raid groups. First raid group is always
+        created as a primary. Last defined raid group will get all unallocated space."""
+        index, raid_output = 0, 'd-i partman-auto-raid/recipe string '
+        raid_groups = 0
+        while index is not None:
+            r_type = self.load_option('raidg%d_type' % index)
+            r_disks = self.load_option('raidg%d_disks' % index) 
+            r_spares = self.load_option('raidg%d_spares' % index) or 0
+            r_fs = self.load_option('raidg%d_fs' % index) or 'ext4'
+            r_mount = self.load_option('raidg%d_mount' % index) or '-'
+            if r_type:
+                raid_output += '%s %s %s %s %s ' % (r_type, len(r_disks.split()), r_spares, r_fs, r_mount)
+                raid_output += '%s . ' % ('#'.join(r_disks.split()))
+                index += 1
+            else:
+                self.logger.info('Partman created %d raid groups.' % (index))
+                raid_groups = index
+                index = None
+        
+        if raid_groups:
+            raid_output += '\nd-i partman-auto/expert_recipe string custom :: '
+            for rg in range(1, raid_groups + 1):
+                size = int(self.load_option('raidg%d_size' % (rg - 1)))
+                if not size:
+                    self.logger.error('Unable to find raidg%d size definition, exiting.' % (rg - 1))
+                    sys.exit(5)
+
+                raid_output += '%d %d %d raid ' % (size, size + 1, size if rg != raid_groups else -1)
+                raid_output += '$primary{ } ' if rg == 1 else ''
+                raid_output += '$lvmignore{ } method{ raid } . '
+        else:
+            self.logger.error('Unable to find raid definitions, exiting.')
+            sys.exit(5)
+
+        return raid_output
+                
+    def preload_partitions(self):
+        """Method preload_partitions loads and parses configuration of parititons. Last defined partition will get all
+        unallocated space."""
+        index, part_output = 0, ''
+        while index is not None:
+            p = self.load_option('part%d' % index)
+            p_fs = self.load_option('part%d_fs' % index) or 'ext4'
+            p_mount = self.load_option('part%d_mount' % index) or None
+            p_size = int(self.load_option('part%d_size' % index)) or 1024
+            p_lvm = self.load_option('part%d_lvm' % index) or 'false'
+            if p:
+                part_output += '%d %d ' % (p_size, p_size + 1)
+                part_output += '%d %s ' % (p_size if self.load_option('part%d' % (index + 1)) else -1, p_fs)
+                part_output += '$defaultignore{ } $lvmok{ } ' if p_lvm == 'true' else '$primary{ } $lvmignore{ } '
+                if p_fs == 'linux-swap':
+                    part_output += 'method{ swap } format{ } '
+                else:
+                    part_output += 'method{ format } format{ } use_filesystem{ } filesystem{ %s } ' % p_fs
+
+                part_output += 'mountpoint{ %s } . ' % p_mount if p_mount is not None else '. '
+                index += 1
+            else:
+                self.logger.info('Partman created %d partitions.' % (index))
+                index = None
+        
+        return part_output + '\n'
 
 
 if __name__ == '__main__':
