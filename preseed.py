@@ -167,9 +167,11 @@ class PreseedCreator(object):
                 partitions_output += ''.join(line).replace(line_lw, option)
 
         partman = PartmanCreator(section, self.cfparser, self.logger)
-        print partman.preload_raid_groups()
-        #partman.preload_partitions()
-        sys.exit(1)
+        if self.option_lookup(section, 'method') == 'raid':
+            partitions_output += partman.preload_raid_groups()
+        else:
+            partitions_output += 'd-i partman-auto/expert_recipe string custom :: '
+        #partitions_output += partman.preload_partitions()
         return partitions_output 
 
     def set_logging_level(self, level):
@@ -191,24 +193,45 @@ class PartmanCreator(object):
         self.logger = logger
         self.partition_options = self.cfparser.options(self.section)
 
+    def load_option(self, option):
+        try:
+            return self.cfparser.get(self.section, option)
+        except ConfigParser.NoOptionError:
+            return False
+
     def preload_raid_groups(self):
         index, raid_output = 0, 'd-i partman-auto-raid/recipe string '
+        raid_groups = 0
         while index is not None:
-            try:
-                options = []
-                # supported raid group options
-                for option in ['type', 'disks', 'spares', 'fs', 'mount']:
-                    options.append(self.cfparser.get(self.section, 'raidg%d_%s' % (index, option)))
-
-                raid_output += '%s %s ' %  (options[0], len(options[1].split()))
-                raid_output += '%s %s %s ' % tuple(options[2:5])
-                raid_output += '%s . ' % ('#'.join(options[1].split()))
-            except ConfigParser.NoOptionError as e:
+            r_type = self.load_option('raidg%d_type' % index)
+            r_disks = self.load_option('raidg%d_disks' % index) 
+            r_spares = self.load_option('raidg%d_spares' % index) or 0
+            r_fs = self.load_option('raidg%d_fs' % index) or 'ext4'
+            r_mount = self.load_option('raidg%d_mount' % index) or '-'
+            if r_type:
+                raid_output += '%s %s %s %s %s ' % (r_type, len(r_disks.split()), r_spares, r_fs, r_mount)
+                raid_output += '%s . ' % ('#'.join(r_disks.split()))
+                index += 1
+            else:
                 self.logger.info('Partman created %d raid groups.' % (index))
+                raid_groups = index
                 index = None
-                break
+        
+        if raid_groups:
+            raid_output += '\nd-i partman-auto/expert_recipe string custom :: '
+            for rg in range(1, raid_groups + 1):
+                size = int(self.load_option('raidg%d_size' % (rg - 1)))
+                if not size:
+                    self.logger.error('Unable to find raidg%d size definition, exiting.' % (rg - 1))
+                    sys.exit(5)
+                    
+                raid_output += '%d %d %d raid ' % (size, size + 1, size if rg != raid_groups else -1)
+                raid_output += '$primary{ } ' if rg == 1 else ''
+                raid_output += '$lvmignore{ } method{ raid } . '
+        else:
+            self.logger.error('Unable to find raid definitions, exiting.')
+            sys.exit(5)
 
-            index += 1
         return raid_output + '\n'
                 
     def preload_partitions(self):
