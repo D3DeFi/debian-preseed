@@ -276,19 +276,19 @@ if __name__ == '__main__':
     parser.add_argument('-q', '--quiet', action='store_true', help='disable console logging to stderr')
     parser.add_argument('-l', '--log-level', action='store', help='set logging level (DEBUG, INFO, WARNING, ERROR). \
         Log messages less severe then specified log level will be ignored')
-    parser.add_argument('-c', '--config', action='store', help='read from specified INI file')
-    parser.add_argument('-i', '--input', action='store', help='use specified template for preseed generation')
+    parser.add_argument('-i', '--input', action='store', help='read from specified INI file')
+    parser.add_argument('-t', '--template', action='store', help='use specified template for preseed generation')
     parser.add_argument('-o', '--output', action='store', help='write preseed to specified file')
     args = parser.parse_args()
 
-    preseed = PreseedCreator(config_file=args.config if args.config else 'config.ini')
+    preseed = PreseedCreator(config_file=args.input if args.input else 'config.ini')
 
     if args.quiet:
         preseed.set_logging_level('QUIET')
     elif args.log_level:
         preseed.set_logging_level(args.log_level)
     
-    preseed.read_template(template=args.input if args.input else 'template.cfg')
+    preseed.read_template(template=args.template if args.template else 'template.cfg')
     output = preseed.create_preseed(output_file=args.output if args.output else None)   
     if output is not None:
         print(output)
