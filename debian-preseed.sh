@@ -42,6 +42,7 @@ cd irmod && gzip -d < ../cd/install.amd/initrd.gz | cpio --extract --make-direct
 
 echo "== copying $PRESEED_FILE to right place :)"
 cp ../$PRESEED_FILE preseed.cfg
+cp ../postinst.sh bin/postinst.sh
 
 echo "== create new initrd.gz"
 find . | cpio -H newc --create | gzip -9 > ../cd/install.amd/initrd.gz
