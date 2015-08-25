@@ -195,6 +195,7 @@ class PartmanCreator(object):
         self.cfparser = cfparser
         self.logger = logger
         self.partition_options = self.cfparser.options(self.section)
+        self.has_lvm = False
 
     def load_option(self, option):
         """Method load_options is simple wrapper for ConfigParser's get method. If value is not found
@@ -214,6 +215,8 @@ class PartmanCreator(object):
             r_disks = self.load_option('raidg%d_disks' % index) 
             r_spares = self.load_option('raidg%d_spares' % index) or 0
             r_fs = self.load_option('raidg%d_fs' % index) or 'ext4'
+            if r_fs == 'lvm':
+                self.has_lvm = True
             r_mount = self.load_option('raidg%d_mount' % index) or '-'
             if r_type:
                 raid_output += '%s %s %s %s %s ' % (r_type, len(r_disks.split()), r_spares, r_fs, r_mount)
@@ -253,7 +256,7 @@ class PartmanCreator(object):
             p_lvm = self.load_option('part%d_lvm' % index) or 'false'
             if p:
                 part_output += '%d %d ' % (p_size, p_size + 1)
-                part_output += '%d %s ' % (p_size if self.load_option('part%d' % (index + 1)) else -1, p_fs)
+                part_output += '%d %s ' % (p_size, p_fs)
                 part_output += '$defaultignore{ } $lvmok{ } ' if p_lvm == 'true' else '$primary{ } $lvmignore{ } '
                 if p_fs == 'linux-swap':
                     part_output += 'method{ swap } format{ } '
@@ -265,7 +268,9 @@ class PartmanCreator(object):
             else:
                 self.logger.info('Partman created %d partitions.' % (index))
                 index = None
-        
+       
+        if self.has_lvm:
+            part_output += '1 2048 -1 ext4 method{ lvm } $defaultignore{ } $lvmok{ } lv_name{ todelete } . ' 
         return part_output + '\n'
 
 
