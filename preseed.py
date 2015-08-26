@@ -270,7 +270,7 @@ class PartmanCreator(object):
                 index = None
        
         if self.has_lvm:
-            part_output += '1 2048 -1 ext4 method{ lvm } $defaultignore{ } $lvmok{ } lv_name{ todelete } . ' 
+            part_output += '1 2048 -1 ext4 method{ format } $defaultignore{ } $lvmok{ } lv_name{ todelete } . ' 
         return part_output + '\n'
 
 

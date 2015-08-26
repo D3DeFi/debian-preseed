@@ -10,7 +10,7 @@ PLACEHOLDER_LV=todelete
 
 for vg in `vgdisplay -c | cut -d: -f1`
  do
-	if lvdisplay /dev/${vg}/${PLACEHOLDER_LV} 2>/dev/null
+	if lvdisplay /dev/${vg}/${PLACEHOLDER_LV} >/dev/null 2>&1
 	 then
 		lvremove -f /dev/${vg}/${PLACEHOLDER_LV}
 	fi
