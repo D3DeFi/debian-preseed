@@ -67,7 +67,7 @@ md5sum $(find -type f ! -name "md5sum.txt" ! -path "./isolinux/*" ! -name "debia
 cd ..
 
 echo "== generating new iso image: $ISO"
-mkisofs -o $ISO -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -R -J -V "$ISO_LABEL" -T -quiet $CDRW
+genisoimage -o $ISO -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -R -J -V "$ISO_LABEL" -T -quiet $CDRW
 
 echo "== cleaning up"
 rm -rf $CDRW $IRMOD $LOOPDIR
