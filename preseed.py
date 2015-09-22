@@ -195,7 +195,7 @@ class PartmanCreator(object):
         self.cfparser = cfparser
         self.logger = logger
         self.partition_options = self.cfparser.options(self.section)
-        self.has_lvm = False
+        self.has_lvm = True if self.load_option('method') == 'lvm' else False
 
     def load_option(self, option):
         """Method load_options is simple wrapper for ConfigParser's get method. If value is not found
@@ -219,7 +219,7 @@ class PartmanCreator(object):
                 self.has_lvm = True
             r_mount = self.load_option('raidg%d_mount' % index) or '-'
             if r_type:
-                raid_output += '%s %s %s %s %s ' % (r_type, len(r_disks.split()), r_spares, r_fs, r_mount)
+                raid_output += '%s %s %s %s %s ' % (r_type, len(r_disks.split()) - int(r_spares), r_spares, r_fs, r_mount)
                 raid_output += '%s . ' % ('#'.join(r_disks.split()))
                 index += 1
             else:
@@ -254,10 +254,12 @@ class PartmanCreator(object):
             p_mount = self.load_option('part%d_mount' % index) or None
             p_size = int(self.load_option('part%d_size' % index)) or 1024
             p_lvm = self.load_option('part%d_lvm' % index) or 'false'
+            p_bootable = self.load_option('part%d_bootable' % index) or 'false'
             if p:
                 part_output += '%d %d ' % (p_size, p_size + 1)
                 part_output += '%d %s ' % (p_size, p_fs)
-                part_output += '$defaultignore{ } $lvmok{ } ' if p_lvm == 'true' else '$primary{ } $lvmignore{ } '
+                part_output += '$defaultignore{ } $lvmok{ } ' if p_lvm == 'true' else '$primary{ } '
+                part_output += '$bootable{ } ' if p_bootable == 'true' else ''
                 if p_fs == 'linux-swap':
                     part_output += 'method{ swap } format{ } '
                 else:
